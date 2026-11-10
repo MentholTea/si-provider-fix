@@ -2,8 +2,12 @@
 build/
 *.class
 *.jar
+
+# 签名材料（绝不提交）
+release.keystore
 *.keystore
-debug.keystore
+*.jks
+keystore.properties
 
 # 编辑器
 .vscode/

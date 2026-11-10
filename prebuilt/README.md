@@ -1,6 +1,6 @@
 # prebuilt
 
-预编译产物，与仓库中源码对应。
+预编译产物，与仓库中源码对应。签名使用固定证书（见 `lsposed-module/SIGNING.md`）。
 
 | 文件 | 说明 |
 |---|---|
@@ -13,20 +13,39 @@
 
 ```
 b1fd59d1f1119616015efe3ea7799a7c5efb27109bcefc479be3a101ebaef550  si-provider-fix-magisk.zip
-bf4fe37fd9417ecb63ab7d0d3cecdc4ca59cb9d9034fd3a4d3cf14baaa3f9a07  si-provider-fix.apk
+446761d545c37521c0ccbae9b38ef07c4aa2a21e0ecafa96113ab6b011b734b6  si-provider-fix.apk
 ```
+
+## 签名
+
+```
+CN=MentholTea, OU=Android, O=si-provider-fix, C=CN
+证书 SHA-256: 0ef1b57bccf28f251aafe645958978fe669a287216fc68d59954c70c4d7355dd
+```
+
+```bash
+apksigner verify --print-certs si-provider-fix.apk
+```
+
+由于签名固定，后续版本可以直接覆盖安装，无需先卸载。
 
 ## 自行构建
 
-- LSPosed 模块：`cd lsposed-module && pwsh -File build.ps1`
-- Magisk 模块：`cd magisk-module && zip -r ../si-provider-fix-magisk.zip .`
-
-预编译产物使用本地调试密钥签名。如需长期分发，建议用自己的密钥重新签名：
+需要 Android SDK 和 JDK 17+：
 
 ```bash
-keytool -genkeypair -keystore my.keystore -alias mykey \
-    -keyalg RSA -keysize 2048 -validity 10000 \
-    -storepass <password> -keypass <password> -dname "CN=YourName"
+export ANDROID_SDK_ROOT=/path/to/sdk
+export JAVA_HOME=/path/to/jdk
 
-apksigner sign --ks my.keystore --out si-provider-fix.apk si-provider-fix-unsigned.apk
+cd lsposed-module
+pwsh -File build.ps1
 ```
+
+Magisk 模块是纯 shell，直接打包：
+
+```bash
+cd magisk-module
+zip -r ../si-provider-fix-magisk.zip .
+```
+
+签名配置见 `lsposed-module/SIGNING.md`。

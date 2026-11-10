@@ -165,13 +165,25 @@ MediaProvider.update(Uri, ContentValues, Bundle)
 需要 JDK 17+、Android SDK（build-tools 34+、platform 35）。
 
 ```powershell
+$env:ANDROID_SDK_ROOT = "C:\path\to\android-sdk"
+$env:JAVA_HOME = "C:\path\to\jdk-21"
+
 cd lsposed-module
 pwsh -File build.ps1
+```
+
+也可以直接用参数指定：
+
+```powershell
+pwsh -File build.ps1 -AndroidSdk C:\sdk -JavaHome C:\jdk-21
 ```
 
 脚本会：编译 Xposed 桩 → 编译模块 → d8 转 dex → aapt2 打包 → zipalign → 签名。
 
 > 注意：项目路径含非 ASCII 字符时 aapt2 会失败，`build.ps1` 已自动镜像到 `%TEMP%` 的 ASCII 目录再构建。
+
+**签名**：需要一个固定的 keystore，否则每次构建签名不同，覆盖安装会失败。
+详见 [`lsposed-module/SIGNING.md`](lsposed-module/SIGNING.md)。仓库不含密钥。
 
 ### Magisk 模块
 

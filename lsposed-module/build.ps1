@@ -1,17 +1,62 @@
+<#
+.SYNOPSIS
+    Build and sign the SI Provider Fix LSPosed module.
+
+.DESCRIPTION
+    Toolchain paths come from parameters, then environment variables, then common defaults.
+    Signing uses a stable keystore when one is configured; see README.md.
+
+.PARAMETER AndroidSdk
+    Android SDK root. Defaults to $env:ANDROID_SDK_ROOT / $env:ANDROID_HOME.
+
+.PARAMETER JavaHome
+    JDK root. Defaults to $env:JAVA_HOME.
+
+.PARAMETER Keystore
+    Keystore file used for signing. Defaults to keystore.properties or <repo>/release.keystore.
+
+.EXAMPLE
+    pwsh -File build.ps1 -AndroidSdk C:\Android\sdk -JavaHome C:\jdk-21
+#>
+param(
+    [string]$AndroidSdk,
+    [string]$JavaHome,
+    [string]$Keystore,
+    [string]$StorePass,
+    [string]$KeyPass,
+    [string]$KeyAlias
+)
+
 $ErrorActionPreference = 'Stop'
 
 # The project lives under a non-ASCII path; aapt2 on Windows cannot open such paths,
 # so everything is mirrored into an ASCII staging directory first.
 $srcRoot = $PSScriptRoot
 $root = Join-Path $env:TEMP 'si-provider-fix-build'
-$sdk = 'D:\000.AI\001.DSH\android-sdk'
-$bt = Join-Path $sdk 'build-tools\34.0.0'
-$jdk = 'D:\000.AI\001.DSH\toolchain\rea-native\jdk-21.0.12.1+1'
-$java = Join-Path $jdk 'bin\java.exe'
-$javac = Join-Path $jdk 'bin\javac.exe'
-$jarTool = Join-Path $jdk 'bin\jar.exe'
-$keytool = Join-Path $jdk 'bin\keytool.exe'
-$androidJar = Join-Path $sdk 'platforms\android-35\android.jar'
+
+if (-not $AndroidSdk) { $AndroidSdk = $env:ANDROID_SDK_ROOT; if (-not $AndroidSdk) { $AndroidSdk = $env:ANDROID_HOME } }
+if (-not $AndroidSdk) { throw 'Android SDK not found. Pass -AndroidSdk or set ANDROID_SDK_ROOT.' }
+if (-not (Test-Path $AndroidSdk)) { throw "Android SDK not found: $AndroidSdk" }
+
+if (-not $JavaHome) { $JavaHome = $env:JAVA_HOME }
+if (-not $JavaHome) { throw 'JDK not found. Pass -JavaHome or set JAVA_HOME.' }
+if (-not (Test-Path $JavaHome)) { throw "JDK not found: $JavaHome" }
+
+$sdk = $AndroidSdk
+$bt = Get-ChildItem (Join-Path $sdk 'build-tools') -Directory |
+    Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+if (-not $bt) { throw "no build-tools under $sdk" }
+$bt = $bt.FullName
+
+$platform = Get-ChildItem (Join-Path $sdk 'platforms') -Directory |
+    Sort-Object Name -Descending | Select-Object -First 1
+if (-not $platform) { throw "no platform under $sdk" }
+
+$java = Join-Path $JavaHome 'bin\java.exe'
+$javac = Join-Path $JavaHome 'bin\javac.exe'
+$jarTool = Join-Path $JavaHome 'bin\jar.exe'
+$keytool = Join-Path $JavaHome 'bin\keytool.exe'
+$androidJar = Join-Path $platform.FullName 'android.jar'
 $d8Jar = Join-Path $bt 'lib\d8.jar'
 $apksignerJar = Join-Path $bt 'lib\apksigner.jar'
 
@@ -79,17 +124,63 @@ $aligned = Join-Path $build 'base-aligned.apk'
 & (Join-Path $bt 'zipalign.exe') -f -p 4 $unsigned $aligned
 if ($LASTEXITCODE -ne 0) { throw 'zipalign failed' }
 
-Write-Host '== 8. keystore =='
-$ks = Join-Path $build 'debug.keystore'
-if (-not (Test-Path $ks)) {
-    & $keytool -genkeypair -keystore $ks -storepass android -keypass android -alias siproviderfix -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=SiProviderFix, OU=Android, O=Local, C=CN' 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'keytool failed' }
+Write-Host '== 8. signing key =='
+# A stable key matters: Android refuses to update an installed app whose signature changed,
+# so re-building with a fresh throwaway key would force an uninstall every time.
+#
+# Resolution order:
+#   1. -Keystore / -StorePass / -KeyPass / -KeyAlias parameters
+#   2. keystore.properties next to this script (never commit it)
+#   3. the repository's release keystore at <repo>/release.keystore
+#   4. a freshly generated throwaway key in the build dir (unsigned-for-release, warns)
+$props = Join-Path $srcRoot 'keystore.properties'
+if (-not $Keystore -and (Test-Path $props)) {
+    $cfg = @{}
+    Get-Content $props | ForEach-Object {
+        if ($_ -match '^\s*([^#=]+?)\s*=\s*(.*)$') { $cfg[$Matches[1]] = $Matches[2] }
+    }
+    if (-not $Keystore)   { $Keystore   = $cfg['storeFile'] }
+    if (-not $StorePass)  { $StorePass  = $cfg['storePassword'] }
+    if (-not $KeyPass)    { $KeyPass    = $cfg['keyPassword'] }
+    if (-not $KeyAlias)   { $KeyAlias   = $cfg['keyAlias'] }
+    # storeFile is relative to the properties file, not to the process working directory
+    if ($Keystore -and -not [System.IO.Path]::IsPathRooted($Keystore)) {
+        $Keystore = Join-Path $srcRoot $Keystore
+    }
+    $Keystore = [System.IO.Path]::GetFullPath($Keystore)
+}
+
+if (-not $Keystore) {
+    $repoRoot = Split-Path $srcRoot -Parent
+    $candidate = Join-Path $repoRoot 'release.keystore'
+    if (Test-Path $candidate) { $Keystore = $candidate }
+}
+
+if ($Keystore) {
+    if (-not (Test-Path $Keystore)) { throw "keystore not found: $Keystore" }
+    if (-not $StorePass) { throw 'storePassword is required when signing with a keystore' }
+    if (-not $KeyAlias)  { throw 'keyAlias is required when signing with a keystore' }
+    if (-not $KeyPass)   { $KeyPass = $StorePass }
+    Write-Host "   using $Keystore (alias $KeyAlias)"
+} else {
+    Write-Host '   WARNING: no release keystore configured, generating a throwaway one.'
+    Write-Host '   The resulting APK is signed with a random key; installing over an existing'
+    Write-Host '   build will fail with INSTALL_FAILED_UPDATE_INCOMPATIBLE.'
+    Write-Host '   Create release.keystore (see README) for a stable signature.'
+    $Keystore = Join-Path $build 'debug.keystore'
+    $StorePass = 'android'
+    $KeyPass = 'android'
+    $KeyAlias = 'siproviderfix'
+    if (-not (Test-Path $Keystore)) {
+        & $keytool -genkeypair -keystore $Keystore -storepass $StorePass -keypass $KeyPass -alias $KeyAlias -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=SiProviderFix, OU=Android, O=Local, C=CN' 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'keytool failed' }
+    }
 }
 
 Write-Host '== 9. sign =='
 $outApk = Join-Path $root 'si-provider-fix.apk'
 if (Test-Path $outApk) { Remove-Item $outApk -Force }
-& $java -jar $apksignerJar sign --ks $ks --ks-pass pass:android --key-pass pass:android --out $outApk $aligned
+& $java -jar $apksignerJar sign --ks $Keystore --ks-key-alias $KeyAlias --ks-pass "pass:$StorePass" --key-pass "pass:$KeyPass" --out $outApk $aligned
 if ($LASTEXITCODE -ne 0) { throw 'apksigner failed' }
 
 Write-Host '== 10. verify =='
