@@ -57,7 +57,7 @@ MediaProvider.insert()  →  改写 relative_path  →  写入 external.db
 
 ### 为什么不用 namespace 挂载
 
-我们试过在 MediaProvider 的 namespace 里直接 `mount --bind`（见 `experimental/`）。
+我们试过在 MediaProvider 的 namespace 里直接 `mount --bind`。
 文件落点是正确的，但 **MediaStore 的记录仍然是旧路径**，因为应用上报的就是旧路径，
 而 `_data` / `relative_path` 是只读列，无法事后修正。只有 Java 层在写入前改写才能彻底解决。
 
@@ -214,7 +214,6 @@ magisk-module/         Magisk 模块（正式）
 lsposed-module/        LSPosed 模块源码与构建脚本
 prebuilt/              预编译产物
 tools/                 诊断与回归测试脚本
-experimental/          已废弃的 namespace 挂载方案（保留供参考）
 ```
 
 ---

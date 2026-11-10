@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 # The project lives under a non-ASCII path; aapt2 on Windows cannot open such paths,
 # so everything is mirrored into an ASCII staging directory first.
-$srcRoot = 'D:\000.AI\001.项目\si-provider-fix'
+$srcRoot = $PSScriptRoot
 $root = Join-Path $env:TEMP 'si-provider-fix-build'
 $sdk = 'D:\000.AI\001.DSH\android-sdk'
 $bt = Join-Path $sdk 'build-tools\34.0.0'
@@ -52,7 +52,7 @@ if ($LASTEXITCODE -ne 0) { throw 'aapt2 compile failed' }
 
 Write-Host '== 5. aapt2 link =='
 $unsigned = Join-Path $build 'base-unsigned.apk'
-& (Join-Path $bt 'aapt2.exe') link -o $unsigned -I $androidJar --manifest (Join-Path $root 'AndroidManifest.xml') --min-sdk-version 29 --target-sdk-version 34 --version-code 1 --version-name 1.0 (Join-Path $build 'res.zip')
+& (Join-Path $bt 'aapt2.exe') link -o $unsigned -I $androidJar --manifest (Join-Path $root 'AndroidManifest.xml') --min-sdk-version 29 --target-sdk-version 34 --version-code 20 --version-name 2.0 (Join-Path $build 'res.zip')
 if ($LASTEXITCODE -ne 0) { throw 'aapt2 link failed' }
 
 Write-Host '== 6. add dex + assets =='
@@ -96,3 +96,4 @@ Write-Host '== 10. verify =='
 & $java -jar $apksignerJar verify --print-certs $outApk
 Copy-Item $outApk (Join-Path $srcRoot 'si-provider-fix.apk') -Force
 Get-Item (Join-Path $srcRoot 'si-provider-fix.apk') | Select-Object FullName, Length
+

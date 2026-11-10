@@ -2,5 +2,5 @@ id=si-provider-fix
 name=SI Provider Fix (系统提供程序重定向)
 version=v2.0
 versionCode=20
-author=local
+author=MentholTea
 description=让 Storage Isolation 的「处理系统提供程序」在 Android 17 上生效：事件驱动地把导出规则推送给 MediaProvider，MediaProvider 侧按规则改写 relative_path。inotify 监听配置变化，无空闲轮询。

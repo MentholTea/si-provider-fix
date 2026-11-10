@@ -1,6 +1,0 @@
-id=si-provider-nsmount
-name=Storage Isolation 系统提供程序修复 (namespace)
-version=v1.0
-versionCode=1
-author=local
-description=在 MediaProvider 自己的 mount namespace 内按 Storage Isolation 的导出规则建立 bind mount，使「处理系统提供程序」在 Android 17 上重新生效。纯 shell 实现，不需要 dex / Xposed / Zygisk。
