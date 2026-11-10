@@ -14,3 +14,6 @@ Thumbs.db
 
 # 日志
 *.log
+
+# 构建产物（保留 prebuilt/ 下的正式发布件）
+lsposed-module/si-provider-fix.apk
