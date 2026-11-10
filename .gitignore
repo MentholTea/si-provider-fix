@@ -1,0 +1,16 @@
+# 构建产物与本地文件
+build/
+*.class
+*.jar
+*.keystore
+debug.keystore
+
+# 编辑器
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log

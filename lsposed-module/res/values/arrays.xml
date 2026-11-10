@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="xposed_scope">
+        <item>com.android.providers.media.module</item>
+        <item>moe.shizuku.redirectstorage</item>
+    </string-array>
+</resources>
