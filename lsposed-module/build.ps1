@@ -98,7 +98,7 @@ if ($LASTEXITCODE -ne 0) { throw 'aapt2 compile failed' }
 
 Write-Host '== 5. aapt2 link =='
 $unsigned = Join-Path $build 'base-unsigned.apk'
-& (Join-Path $bt 'aapt2.exe') link -o $unsigned -I $androidJar --manifest (Join-Path $root 'AndroidManifest.xml') --min-sdk-version 29 --target-sdk-version 34 --version-code 22 --version-name 2.1.1 (Join-Path $build 'res.zip')
+& (Join-Path $bt 'aapt2.exe') link -o $unsigned -I $androidJar --manifest (Join-Path $root 'AndroidManifest.xml') --min-sdk-version 29 --target-sdk-version 34 --version-code 23 --version-name 2.1.2 (Join-Path $build 'res.zip')
 if ($LASTEXITCODE -ne 0) { throw 'aapt2 link failed' }
 
 Write-Host '== 6. add dex + assets =='

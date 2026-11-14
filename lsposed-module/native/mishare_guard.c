@@ -1,7 +1,8 @@
 /*
- * Blocks MediaProvider's native creation of the stray MiShare directory.
+ * Blocks MediaProvider (and other hooked processes) from creating stray directories in the
+ * shared-storage root.
  *
- * strace on the MediaProvider process shows:
+ * strace on the MediaProvider process shows how MiShare appears:
  *
  *   9420 mkdirat(AT_FDCWD, "/storage/emulated/0/MiShare", 0775) = 0
  *
@@ -13,8 +14,12 @@
  * Both mkdirat and mkdir are covered. Current builds reach the directory through mkdirat, but
  * bionic's mkdir is a separate syscall wrapper and a ROM change could switch to it.
  *
- * Only the storage-root directory is matched. Download/MiShare (the real transfer folder used by
- * the MiShare app) and any other path are untouched.
+ * Blocked list (directory names directly under a storage root):
+ *   MiShare              re-created by MediaProvider on every process start
+ *   com.miui.voiceassist  created by the voice assistant, empty audio/ shell
+ *
+ * Sub-paths and everything else (Download/MiShare included) are untouched: the match requires the
+ * path to be exactly <root><name> or <root><name>/.
  */
 #include <jni.h>
 #include <stdint.h>
@@ -34,37 +39,44 @@ static mkdirat_fn orig_mkdirat = NULL;
 static mkdir_fn orig_mkdir = NULL;
 static int installed = 0;
 
+/* Directories that must never be created directly under a storage root. */
+static const char *kBlockedDirs[] = {
+        "MiShare",
+        "com.miui.voiceassist",
+};
+
+/* Every prefix a directory-creating call may use for the same on-disk root. */
+static const char *kRootPrefixes[] = {
+        "/storage/emulated/0/",
+        "/storage/self/primary/",
+        "/data/media/0/",
+        "/mnt/user/0/primary/",
+        "/mnt/runtime/default/emulated/0/",
+        "/mnt/runtime/read/emulated/0/",
+        "/mnt/runtime/write/emulated/0/",
+};
+
 static int is_target_path(const char *path) {
     if (path == NULL) {
         return 0;
     }
-    size_t n = strlen(path);
-    if (n < 7) {
-        return 0;
-    }
-    int tail_ok = (strcmp(path + n - 7, "MiShare") == 0);
-    if (!tail_ok && n >= 8) {
-        tail_ok = (path[n - 1] == '/' && strncmp(path + n - 8, "MiShare/", 8) == 0);
-    }
-    if (!tail_ok) {
-        return 0;
-    }
-    if (strstr(path, "/Download/MiShare") != NULL) {
-        return 0;
-    }
-    static const char *kRoots[] = {
-            "/storage/emulated/0/MiShare",
-            "/storage/self/primary/MiShare",
-            "/data/media/0/MiShare",
-            "/mnt/user/0/primary/MiShare",
-            "/mnt/runtime/default/emulated/0/MiShare",
-            "/mnt/runtime/read/emulated/0/MiShare",
-            "/mnt/runtime/write/emulated/0/MiShare",
-    };
-    for (size_t i = 0; i < sizeof(kRoots) / sizeof(kRoots[0]); i++) {
-        size_t len = strlen(kRoots[i]);
-        if (strncmp(path, kRoots[i], len) == 0 && (path[len] == '\0' || path[len] == '/')) {
-            return 1;
+    size_t plen = strlen(path);
+    for (size_t r = 0; r < sizeof(kRootPrefixes) / sizeof(kRootPrefixes[0]); r++) {
+        size_t rlen = strlen(kRootPrefixes[r]);
+        if (plen <= rlen || strncmp(path, kRootPrefixes[r], rlen) != 0) {
+            continue;
+        }
+        const char *rest = path + rlen;
+        size_t restlen = plen - rlen;
+        for (size_t b = 0; b < sizeof(kBlockedDirs) / sizeof(kBlockedDirs[0]); b++) {
+            size_t blen = strlen(kBlockedDirs[b]);
+            if (restlen == blen && strncmp(rest, kBlockedDirs[b], blen) == 0) {
+                return 1;
+            }
+            if (restlen == blen + 1 && strncmp(rest, kBlockedDirs[b], blen) == 0
+                    && rest[blen] == '/') {
+                return 1;
+            }
         }
     }
     return 0;
@@ -91,9 +103,9 @@ static void *page_start(void *p) {
 }
 
 /*
- * Replaces the first 16 bytes of `target` with an absolute jump to `replacement`. The displaced
- * instructions are copied into a freshly mapped trampoline that jumps back to `target + 16`, so
- * the original implementation stays callable through `orig_out`.
+ * Replaces the first 16 bytes of the resolved symbol with an absolute jump to `replacement`. The
+ * displaced instructions are copied into a freshly mapped trampoline that jumps back to
+ * `target + 16`, so the original implementation stays callable through `orig_out`.
  */
 static int install_hook(const char *symbol, void *replacement, void **orig_out) {
     void *target = dlsym(RTLD_DEFAULT, symbol);

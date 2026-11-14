@@ -156,7 +156,7 @@ MediaProvider.update(Uri, ContentValues, Bundle)
 
 规则表由 `RuleStore` 维护，**2 秒 TTL**，只读 DE 目录那一个文件。
 
-#### 根目录 MiShare 拦截（native 半层）
+#### 根目录多余目录拦截（native 半层）
 
 MediaProvider 每次进程启动都会创建 `/storage/emulated/0/MiShare`。strace 显示调用来自 FUSE worker 线程：
 
@@ -169,8 +169,15 @@ MediaProvider 每次进程启动都会创建 `/storage/emulated/0/MiShare`。str
 删掉媒体库中的目录行后仍会重建 —— 说明是 native 侧无条件 ensure。
 
 因此模块带一个 native 库（`native/mishare_guard.c` → `lib/arm64-v8a/libmishareguard.so`），
-在 MediaProvider 进程里 patch libc 的 `mkdirat` / `mkdir`：只匹配存储根下的 `MiShare`，命中就返回 0、不落盘；
-其余路径（包括互传真正使用的 `Download/MiShare`）原样放行。
+在 MediaProvider 进程里 patch libc 的 `mkdirat` / `mkdir`：只匹配存储根下的这两项，命中就返回 0、不落盘：
+
+| 目录 | 说明 |
+|---|---|
+| `MiShare` | MediaProvider 每次启动必建，实际是空壳（互传只写 `Download/MiShare`） |
+| `com.miui.voiceassist` | 语音助手创建的 `audio/` 空壳，非每次必建 |
+
+匹配要求路径恰好是 `<root><name>` 或 `<root><name>/`，因此 `Download/MiShare`、
+`Android/media/com.miui.voiceassist` 以及任意子路径都原样放行。
 
 LSPosed 交给模块的 classloader 把 native 搜索路径报成 `base.apk!/lib/arm64-v8a`（zip 内路径），
 `System.loadLibrary` 无法使用它，因此 `NativeHook` 从 loader 的 `module=`/`nativeLibraryDirectories`
