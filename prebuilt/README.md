@@ -5,7 +5,7 @@
 | 文件 | 说明 |
 |---|---|
 | `si-provider-fix-magisk.zip` | Magisk / KernelSU 模块，v2.0（inotify 事件驱动） |
-| `si-provider-fix.apk` | LSPosed 模块，v2.0（versionCode 20） |
+| `si-provider-fix.apk` | LSPosed 模块，v2.1.1（versionCode 22，native mkdirat/mkdir 拦截） |
 
 安装步骤见根目录 `README.md`。
 
@@ -13,7 +13,7 @@
 
 ```
 b1fd59d1f1119616015efe3ea7799a7c5efb27109bcefc479be3a101ebaef550  si-provider-fix-magisk.zip
-446761d545c37521c0ccbae9b38ef07c4aa2a21e0ecafa96113ab6b011b734b6  si-provider-fix.apk
+e4c8a72c295d34aedaeae29c334dd7f92e94f91ee26f4951025cbf0112b1f031  si-provider-fix.apk
 ```
 
 ## 签名

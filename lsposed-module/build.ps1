@@ -67,6 +67,7 @@ Copy-Item (Join-Path $srcRoot 'res') $root -Recurse -Force
 Copy-Item (Join-Path $srcRoot 'src') $root -Recurse -Force
 Copy-Item (Join-Path $srcRoot 'stubs') $root -Recurse -Force
 Copy-Item (Join-Path $srcRoot 'assets') $root -Recurse -Force
+Copy-Item (Join-Path $srcRoot 'native') $root -Recurse -Force
 
 $build = Join-Path $root 'build'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
@@ -97,7 +98,7 @@ if ($LASTEXITCODE -ne 0) { throw 'aapt2 compile failed' }
 
 Write-Host '== 5. aapt2 link =='
 $unsigned = Join-Path $build 'base-unsigned.apk'
-& (Join-Path $bt 'aapt2.exe') link -o $unsigned -I $androidJar --manifest (Join-Path $root 'AndroidManifest.xml') --min-sdk-version 29 --target-sdk-version 34 --version-code 20 --version-name 2.0 (Join-Path $build 'res.zip')
+& (Join-Path $bt 'aapt2.exe') link -o $unsigned -I $androidJar --manifest (Join-Path $root 'AndroidManifest.xml') --min-sdk-version 29 --target-sdk-version 34 --version-code 22 --version-name 2.1.1 (Join-Path $build 'res.zip')
 if ($LASTEXITCODE -ne 0) { throw 'aapt2 link failed' }
 
 Write-Host '== 6. add dex + assets =='
@@ -115,6 +116,18 @@ try {
     $initBytes = [System.IO.File]::ReadAllBytes((Join-Path $root 'assets\xposed_init'))
     $initStream.Write($initBytes, 0, $initBytes.Length)
     $initStream.Close()
+
+    # native half: patches mkdirat inside MediaProvider (see native/mishare_guard.c)
+    $soPath = Join-Path $root 'native\libmishareguard.so'
+    if (Test-Path $soPath) {
+        $soEntry = $zip.CreateEntry('lib/arm64-v8a/libmishareguard.so', [System.IO.Compression.CompressionLevel]::Optimal)
+        $soStream = $soEntry.Open()
+        $soBytes = [System.IO.File]::ReadAllBytes($soPath)
+        $soStream.Write($soBytes, 0, $soBytes.Length)
+        $soStream.Close()
+    } else {
+        Write-Host '   WARNING: native/libmishareguard.so missing, APK without native guard'
+    }
 } finally {
     $zip.Dispose()
 }

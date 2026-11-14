@@ -27,6 +27,7 @@ public final class MainHook implements IXposedHookLoadPackage {
                 Logx.i("loaded in MediaProvider process=" + lpparam.processName);
                 Markers.write(lpparam.packageName, "media-provider-install");
                 MediaProviderHooks.install(lpparam.classLoader);
+                NativeHook.installIfPossible();
             } else if (PKG_STORAGE_ISOLATION.equals(lpparam.packageName)) {
                 Logx.i("loaded in StorageIsolation process=" + lpparam.processName);
                 Markers.write(lpparam.packageName, "storage-isolation-install");

@@ -156,6 +156,26 @@ MediaProvider.update(Uri, ContentValues, Bundle)
 
 规则表由 `RuleStore` 维护，**2 秒 TTL**，只读 DE 目录那一个文件。
 
+#### 根目录 MiShare 拦截（native 半层）
+
+MediaProvider 每次进程启动都会创建 `/storage/emulated/0/MiShare`。strace 显示调用来自 FUSE worker 线程：
+
+```
+9420 mkdirat(AT_FDCWD, "/storage/emulated/0/MiShare", 0775) = 0
+```
+
+这一步在 Java 层之下：`File.mkdirs`、`File.mkdir`、`Os.mkdir`、`libcore.io.Linux.mkdir` 四个 hook 都看不到它
+（在设备上逐个实测，`hooks=4` 全部安装成功但零命中）。目录名也不在任何可读 dex/jar/native 字面量里，
+删掉媒体库中的目录行后仍会重建 —— 说明是 native 侧无条件 ensure。
+
+因此模块带一个 native 库（`native/mishare_guard.c` → `lib/arm64-v8a/libmishareguard.so`），
+在 MediaProvider 进程里 patch libc 的 `mkdirat` / `mkdir`：只匹配存储根下的 `MiShare`，命中就返回 0、不落盘；
+其余路径（包括互传真正使用的 `Download/MiShare`）原样放行。
+
+LSPosed 交给模块的 classloader 把 native 搜索路径报成 `base.apk!/lib/arm64-v8a`（zip 内路径），
+`System.loadLibrary` 无法使用它，因此 `NativeHook` 从 loader 的 `module=`/`nativeLibraryDirectories`
+推导出 app 解压目录下的绝对路径再 `System.load`。
+
 ---
 
 ## 构建
